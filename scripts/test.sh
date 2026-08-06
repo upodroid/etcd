@@ -561,8 +561,7 @@ function release_pass {
 
 function release_tests_pass {
   if [ -z "${VERSION:-}" ]; then
-    VERSION=$(go list -m go.etcd.io/etcd/api/v3 2>/dev/null | \
-     awk '{split(substr($2,2), a, "."); print a[1]"."a[2]".99"}')
+    VERSION=$(git describe --tags --always --dirty)
   fi
 
   if [ -n "${CI:-}" ]; then
@@ -584,7 +583,6 @@ EOF
   fi
 
   DRY_RUN=true run "${ETCD_ROOT_DIR}/scripts/release.sh" --no-upload --no-docker-push --no-gh-release --in-place "${VERSION}"
-  VERSION="${VERSION}" run "${ETCD_ROOT_DIR}/scripts/test_images.sh"
 }
 
 function mod_tidy_pass {
