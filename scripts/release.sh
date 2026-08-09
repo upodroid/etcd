@@ -246,7 +246,8 @@ main() {
       fi
     fi
 
-    OCI_REGISTRY="${OCI_REGISTRY:-}" OCI_PATH="${OCI_PATH:-}" REPOSITORY=$(pwd) ./scripts/build-release.sh "${RELEASE_VERSION}" "${NO_DOCKER_PUSH}"
+    # release.sh owns the GitHub release (see the gh section below).
+    SKIP_GH_RELEASE=true OCI_REGISTRY="${OCI_REGISTRY:-}" OCI_PATH="${OCI_PATH:-}" REPOSITORY=$(pwd) ./scripts/build-release.sh "${RELEASE_VERSION}" "${NO_DOCKER_PUSH}"
   fi
 
   # Sanity checks.

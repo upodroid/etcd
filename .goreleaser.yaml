@@ -1,0 +1,145 @@
+# GoReleaser configuration replacing scripts/build-binary.sh and
+# scripts/build-docker.sh. Invoked through scripts/build-release.sh.
+#
+# VERSION is always exported by scripts/build-release.sh; it falls back to the
+# tag so `goreleaser release` also works standalone.
+version: 2
+
+project_name: etcd
+
+dist: release
+
+builds:
+  - id: etcd
+    dir: ./server
+    main: .
+    binary: etcd
+    env: &build_env
+      - CGO_ENABLED=0
+    flags: &build_flags
+      - -trimpath
+      - -installsuffix=cgo
+    ldflags: &build_ldflags
+      - -s -w
+      - -X=go.etcd.io/etcd/api/v3/version.GitSHA={{ .FullCommit }}
+      - -X=go.etcd.io/etcd/api/v3/version.Version={{ envOrDefault "VERSION" .Tag }}
+    mod_timestamp: "{{ .CommitTimestamp }}"
+    goos: &build_goos
+      - linux
+      - darwin
+      - windows
+    goarch: &build_goarch
+      - amd64
+      - arm64
+      - ppc64le
+      - s390x
+    ignore: &build_ignore
+      - goos: darwin
+        goarch: ppc64le
+      - goos: darwin
+        goarch: s390x
+      - goos: windows
+        goarch: arm64
+      - goos: windows
+        goarch: ppc64le
+      - goos: windows
+        goarch: s390x
+
+  - id: etcdctl
+    dir: ./etcdctl
+    main: .
+    binary: etcdctl
+    env: *build_env
+    flags: *build_flags
+    ldflags: *build_ldflags
+    mod_timestamp: "{{ .CommitTimestamp }}"
+    goos: *build_goos
+    goarch: *build_goarch
+    ignore: *build_ignore
+
+  - id: etcdutl
+    dir: ./etcdutl
+    main: .
+    binary: etcdutl
+    env: *build_env
+    flags: *build_flags
+    ldflags: *build_ldflags
+    mod_timestamp: "{{ .CommitTimestamp }}"
+    goos: *build_goos
+    goarch: *build_goarch
+    ignore: *build_ignore
+
+archives:
+  - id: etcd
+    name_template: 'etcd-{{ envOrDefault "VERSION" .Tag }}-{{ .Os }}-{{ .Arch }}'
+    wrap_in_directory: true
+    # Normalize binary metadata for reproducible archive checksums.
+    builds_info:
+      mode: 0o755
+      owner: root
+      group: root
+      mtime: "{{ .CommitDate }}"
+    formats: [tar.gz]
+    format_overrides:
+      - goos: darwin
+        formats: [zip]
+      - goos: windows
+        formats: [zip]
+    files:
+      - src: README.md
+        info: &file_info
+          # Normalize metadata taken from the local checkout so archive
+          # checksums are reproducible across machines.
+          mtime: "{{ .CommitDate }}"
+          mode: 0o644
+          owner: root
+          group: root
+      - src: etcdctl/README.md
+        dst: README-etcdctl.md
+        info: *file_info
+      - src: etcdctl/READMEv2.md
+        dst: READMEv2-etcdctl.md
+        info: *file_info
+      - src: etcdutl/README.md
+        dst: README-etcdutl.md
+        info: *file_info
+      - src: Documentation/**/*
+        info: *file_info
+
+checksum:
+  name_template: SHA256SUMS
+  algorithm: sha256
+
+snapshot:
+  version_template: '{{ envOrDefault "VERSION" .Tag }}'
+
+changelog:
+  disable: true
+
+# Creates a draft GitHub release with notes rendered from
+# scripts/release_notes.md.tmpl (passed by scripts/build-release.sh).
+# Set SKIP_GH_RELEASE=true to let scripts/release.sh handle the release.
+release:
+  disable: '{{ envOrDefault "SKIP_GH_RELEASE" "false" }}'
+  draft: true
+  replace_existing_draft: true
+  prerelease: auto
+  name_template: "{{ .Tag }}"
+
+dockers_v2:
+  - id: etcd
+    dockerfile: Dockerfile
+    # Empty image names are ignored: with OCI_REGISTRY set only the custom
+    # registry is used, otherwise the default gcr.io + quay.io pair.
+    images:
+      - '{{ if index .Env "OCI_REGISTRY" }}{{ .Env.OCI_REGISTRY }}/{{ envOrDefault "OCI_PATH" "etcd" }}{{ end }}'
+      - '{{ if not (index .Env "OCI_REGISTRY") }}gcr.io/etcd-development/etcd{{ end }}'
+      - '{{ if not (index .Env "OCI_REGISTRY") }}quay.io/coreos/etcd{{ end }}'
+    tags:
+      - '{{ envOrDefault "VERSION" .Tag }}'
+    platforms:
+      - linux/amd64
+      - linux/arm64
+      - linux/ppc64le
+      - linux/s390x
+    sbom: false
